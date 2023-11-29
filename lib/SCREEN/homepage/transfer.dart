@@ -5,6 +5,8 @@ import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 
+import 'package:second/SCREEN/homepage/transfer/Confirmation.dart';
+
 class Transfer extends StatefulWidget {
   const Transfer({super.key});
 
@@ -13,16 +15,85 @@ class Transfer extends StatefulWidget {
 }
 
 class _TransferState extends State<Transfer> {
-
+  bool loading = false;
   String payId = " ";
+  String send_payId =" ";
   String _scanBarcode =" ";
   bool got_data = false;
   bool selected = true;
   var textselect = 1;
+  final TextEditingController payid_control = TextEditingController();
+  late Widget sendContent;
   @override
   void initState(){
     super.initState();
     getPayId();
+
+    sendContent = SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text("Send to a User",style: TextStyle(fontSize: 25,fontWeight: FontWeight.bold),),
+              ],
+            ),
+            SizedBox(height: 30,),
+            TextField(
+              decoration: InputDecoration(
+                fillColor: Colors.white,
+                hintText: "Enter Pay ID",
+                border: OutlineInputBorder(),
+              ),
+              controller: payid_control,
+            ),
+            SizedBox(height: 30,),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 50,
+                    child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(backgroundColor: Colors.teal,),
+                        onPressed: (){
+                          searchPayIdInFirestore(payid_control.text);
+                        },
+                        child:  loading?const SizedBox(
+                          width: 10,
+                          height: 10,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ):
+                        Text("Continue", style: TextStyle(fontSize: 17,color: Colors.black),)),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20,),
+
+            TextButton(
+                onPressed: (){
+                  scanQR();
+                },
+                child:Text("Scan QR code",style: TextStyle(color: Colors.teal),)),
+            SizedBox(height: 30,),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text("Recent",style: TextStyle(fontSize: 15,color: Colors.teal),),
+              ],
+            )
+
+            // for now we use pay id, username and phone number
+
+          ],
+        ),
+      ),
+    );
   }
   Future<void> getPayId() async {
     final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('getPayId');
@@ -45,6 +116,45 @@ class _TransferState extends State<Transfer> {
       throw e; // Re-throw the error or return a default value
     }
   }
+
+  //search payid
+  Future<void> searchPayIdInFirestore(String payId) async {
+    setState(() {
+      loading = true;
+    });
+    try {
+      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('searchPayId');
+
+      final HttpsCallableResult result = await callable.call({'payId': payId});
+
+      final bool payIdFound = result.data['found'];
+      final String firstname = result.data['firstname'];
+      final String lastname = result.data['lastname'];
+      final String fullname = "$firstname $lastname";
+
+      if (payIdFound) {
+        // Pay ID found in Firestore
+        //print('Pay ID found in Firestore!');
+        Navigator.push(
+            context, MaterialPageRoute(builder: (context) =>Confirmation(
+          fullname: fullname,payId: payId,
+        )));
+      } else {
+        // Pay ID not found
+        print('Pay ID not found in Firestore.');
+      }
+    } catch (e) {
+      print("Error searching for Pay ID: $e");
+    }
+    finally{
+      setState(() {
+        loading=false;
+      });
+    }
+
+
+  }
+
   Future<void> scanQR() async {
     String barcodeScanRes;
     try {
@@ -58,6 +168,7 @@ class _TransferState extends State<Transfer> {
     setState(() {
       _scanBarcode = barcodeScanRes;
     });
+    searchPayIdInFirestore(_scanBarcode);
   }
 
   //recieve widget
@@ -131,58 +242,6 @@ class _TransferState extends State<Transfer> {
     ],
   );
 
-  //send widget
-  Widget sendContent = SingleChildScrollView(
-    child: Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              Text("Send to a User",style: TextStyle(fontSize: 25,fontWeight: FontWeight.bold),),
-            ],
-          ),
-          SizedBox(height: 30,),
-          TextField(
-            decoration: InputDecoration(
-              fillColor: Colors.white,
-              hintText: "Enter Pay ID",
-              border: OutlineInputBorder(),
-            ),
-          ),
-          SizedBox(height: 30,),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 50,
-                  child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(backgroundColor: Colors.teal,),
-                      onPressed: (){},
-                      child: Text("Continue", style: TextStyle(fontSize: 17,color: Colors.black),)),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 20,),
-
-          TextButton(onPressed: (){},
-              child:Text("Scan QR code",style: TextStyle(color: Colors.teal),)),
-          SizedBox(height: 30,),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              Text("Recent",style: TextStyle(fontSize: 15,color: Colors.teal),),
-            ],
-          )
-          
-          // for now we use pay id, username and phone number
-
-        ],
-      ),
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
